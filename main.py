@@ -279,7 +279,7 @@ import faiss
 import pickle
 import os
 import pinecone
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 import mail
 # from langchain_core.prompts import PromptTemplate
 # from langchain_core.output_parsers import StrOutputParser
@@ -301,7 +301,7 @@ import mail
 #     nav_store = pickle.load(f)
 # nav_store.index = nav_index
 
-load_dotenv()
+# load_dotenv()
 
 
 # Environment variables

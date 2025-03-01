@@ -1,15 +1,15 @@
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.image import MIMEImage
-from dotenv import load_dotenv
+# from email.mime.image import MIMEImage
+# from dotenv import load_dotenv
 import os
-import io
-from PIL import Image
-import numpy as np
-import streamlit as st
+# import io
+# from PIL import Image
+# import numpy as np
+# import streamlit as st
 
-load_dotenv()
+# load_dotenv()
 
 # Email credentials
 EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS')

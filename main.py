@@ -277,7 +277,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from huggingface_hub import InferenceClient
 import os
 import pinecone
-from .services import email_service
+from services import email_service
 # import faiss
 # import pickle
 # from dotenv import load_dotenv

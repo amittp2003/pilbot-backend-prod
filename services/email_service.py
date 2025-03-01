@@ -5,7 +5,7 @@ from email.mime.text import MIMEText
 # from dotenv import load_dotenv
 import os
 # import io
-from PIL import Image
+# from PIL import Image
 # import numpy as np
 # import streamlit as st
 

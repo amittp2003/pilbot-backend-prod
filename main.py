@@ -275,8 +275,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_huggingface import HuggingFaceEmbeddings
 from huggingface_hub import InferenceClient
-import faiss
-import pickle
+# import faiss
+# import pickle
 import os
 import pinecone
 # from dotenv import load_dotenv

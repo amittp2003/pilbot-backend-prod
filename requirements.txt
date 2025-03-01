@@ -1,6 +1,5 @@
 fastapi == 0.115.6
 uvicorn == 0.32.1
-python-dotenv ==
 huggingface_hub== 0.25.1
 langchain_huggingface == 0.1.0
 pinecone == 6.0.1

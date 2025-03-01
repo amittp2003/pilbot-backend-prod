@@ -275,12 +275,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_huggingface import HuggingFaceEmbeddings
 from huggingface_hub import InferenceClient
-# import faiss
-# import pickle
 import os
 import pinecone
+from . import email_service
+# import faiss
+# import pickle
 # from dotenv import load_dotenv
-import mail
 # from langchain_core.prompts import PromptTemplate
 # from langchain_core.output_parsers import StrOutputParser
 # from langchain_community.vectorstores import FAISS
@@ -503,6 +503,6 @@ def handle_admissions_query(message: str):
 def handle_sending_mail(message: Message, email: str = Body(...)):
     user= email.split('@')[0]
     print("Iam here", message.text,email)
-    mail.sendEmail(email, user, message.text)
+    email_service.sendEmail(email, user, message.text)
 
     return {'reply': "Mail sent"}

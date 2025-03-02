@@ -278,8 +278,8 @@ from huggingface_hub import InferenceClient
 import os
 import pinecone
 from services import email_service
-from dotenv import load_dotenv
-load_dotenv()
+# from dotenv import load_dotenv
+# load_dotenv()
 
 
 # Environment variables

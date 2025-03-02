@@ -389,8 +389,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[HOSTS],
     allow_credentials=True,
-    allow_methods=[HOSTS],
-    allow_headers=[HOSTS],
+    allow_methods=['*'],
+    allow_headers=['*'],
 )
 
 # Pydantic Model for Request

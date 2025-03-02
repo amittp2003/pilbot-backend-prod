@@ -278,34 +278,13 @@ from huggingface_hub import InferenceClient
 import os
 import pinecone
 from services import email_service
-# import faiss
-# import pickle
-# from dotenv import load_dotenv
-# from langchain_core.prompts import PromptTemplate
-# from langchain_core.output_parsers import StrOutputParser
-# from langchain_community.vectorstores import FAISS
-# from langchain import LLMChain
-# from langchain_community.utilities import GoogleSearchAPIWrapper
-# from langchain.tools import Tool
-# from langchain.agents import initialize_agent
-# from langchain_huggingface import HuggingFaceEndpoint
-
-# Load the pre-trained index and vector store
-# index = faiss.read_index("index_PCE.index")
-# with open("faiss_PCE.pkl", "rb") as fp:
-#     store = pickle.load(fp)
-# store.index = index
-
-# nav_index = faiss.read_index("index_nav.index")
-# with open("faiss_nav.pkl", "rb") as f:
-#     nav_store = pickle.load(f)
-# nav_store.index = nav_index
-
-# load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
 
 
 # Environment variables
 HF_TOKEN = os.getenv('HF_TOKEN')
+HOSTS= os.environ['HOSTS']
 PINECONE_API_KEY=os.environ['PINECONE_API_KEY']
 GEN_INDEX=os.environ['GEN_INDEX']
 NAV_INDEX=os.environ['NAV_INDEX']
@@ -315,8 +294,6 @@ pinecone_c = pinecone.Pinecone(api_key=PINECONE_API_KEY)
 gen_index= pinecone_c.Index(GEN_INDEX)
 nav_index = pinecone_c.Index(NAV_INDEX)
 
-# Embeddings model
-embeddings=HuggingFaceEmbeddings()
 
 TEMPLATE = '''
 You are a chatbot assistant for Pillai College of Engineering, designed to provide information about student services and college-related inquiries.
@@ -348,9 +325,6 @@ Query: "{user_query}"
 Intent:
 '''
 
-# Nav_prompt='''
-# You are an AI assitant that answers to questions asked regarding CAMPUS NAVIGATION ONLY!!. You are developed to assist with navigation in PCE campus. When user query is about welcome respond accordingly. IF THE CONTEXT RELATED TO THE QUERY IS NOT SUFFICIENT SIMPLY SAY "Sorry for inconvience Iam not able answer your query!!"  
-
 Nav_prompt = '''
 You are a helpful navigation assistant that answers to questions asked regarding CAMPUS NAVIGATION ONLY!!. You are developed to assist with navigation in PCE campus. Using the provided context about rooms and locations, 
 give clear, step-by-step directions. Whenever the query is about navigation format your response in this structure else respond accordingly:
@@ -377,23 +351,7 @@ Remember to:
 
 Answer:'''
 
-# Utility Functions
-# def generate_prompt(question, retrieved_docs, prmt_TEM):
-#     doc_summaries = "\n".join([f"CONTENT: {doc.page_content}" for doc in retrieved_docs])
-#     prompt = prmt_TEM.format(question=question, summaries=doc_summaries)
-#     return prompt
-
 def query_llama(question,  doc_summaries, prmt_TEM, repo_id='mistralai/Mistral-7B-Instruct-v0.3'):
-    # llm=HuggingFaceEndpoint(repo_id=repo_id,)
-
-    # prompt=PromptTemplate(input_variables=["summaries", "question"], template=prmt_TEM)
-    # chain = prompt | llm | StrOutputParser()
-    # resp= chain.invoke({"summaries": summaries, "question":question})
-    
-    # llm_chain=LLMChain(llm, prompt)
-    # response=llm.invoke(prompt)
-    # response=llm_chain.run()
-    
     prompt = prmt_TEM.format(question=question, summaries=doc_summaries)
     client = InferenceClient(repo_id, token=HF_TOKEN)
     response = client.chat_completion(
@@ -406,11 +364,7 @@ def query_llama(question,  doc_summaries, prmt_TEM, repo_id='mistralai/Mistral-7
     # return response.split("</think>")[-1].strip()
 
 
-def query_with_template_and_sources(question, vectorstore, prmt_TEM):
-    # docs = vectorstore.similarity_search(question, k=2)
-    # doc_summaries = "\n".join([f"CONTENT: {doc.page_content}" for doc in docs])
-    # prompt = generate_prompt(question, docs, prmt_TEM)
-    
+def query_with_template_and_sources(question, vectorstore, prmt_TEM):    
     query_vector=embeddings.embed_query(question)
     query_results=vectorstore.query(vector=query_vector, top_k=5, include_metadata=True)
     doc_summaries='\n'.join([f"Content: {match['metadata']['text']}" for match in query_results['matches']])
@@ -418,10 +372,6 @@ def query_with_template_and_sources(question, vectorstore, prmt_TEM):
     return answer
 
 def query_with_template_and_sources_NAV(question, vectorstore, prmt_TEM):
-    # doc_summaries = vectorstore.similarity_search(question, k=5)
-    # doc_summaries = "\n".join([f"CONTENT: {doc.page_content}" for doc in docs])
-    # prompt = generate_prompt(question, docs, prmt_TEM)
-
     query_vector=embeddings.embed_query(question)
     query_results=vectorstore.query(vector=query_vector, top_k=3, include_metadata=True)
     doc_summaries='\n'.join([f"Content: {match['metadata']['text']}" for match in query_results['matches']])
@@ -431,13 +381,16 @@ def query_with_template_and_sources_NAV(question, vectorstore, prmt_TEM):
 # FastAPI Application
 app = FastAPI()
 
+# Embeddings model
+embeddings=HuggingFaceEmbeddings()
+
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[HOSTS],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=[HOSTS],
+    allow_headers=[HOSTS],
 )
 
 # Pydantic Model for Request

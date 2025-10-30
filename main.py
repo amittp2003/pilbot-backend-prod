@@ -278,8 +278,8 @@ from huggingface_hub import InferenceClient
 import os
 import pinecone
 from services import email_service
-# from dotenv import load_dotenv
-# load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
 
 
 # Environment variables
@@ -384,14 +384,35 @@ app = FastAPI()
 # Embeddings model
 embeddings=HuggingFaceEmbeddings()
 
-# CORS Middleware
+# CORS Middleware - Allow multiple origins
+allowed_origins = HOSTS.split(',') if ',' in HOSTS else [HOSTS] if HOSTS != '*' else ['*']
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[HOSTS],
+    allow_origins=allowed_origins if HOSTS != '*' else ['*'],
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],
 )
+
+# Health Check Endpoint
+@app.get("/")
+async def root():
+    return {
+        "status": "alive",
+        "message": "Pilbot API is running",
+        "version": "1.0.0",
+        "endpoints": [
+            "/chat/general",
+            "/chat/academics", 
+            "/chat/campus-nav",
+            "/chat/admissions",
+            "/chat/mail"
+        ]
+    }
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 # Pydantic Model for Request
 class ChatRequest(BaseModel):

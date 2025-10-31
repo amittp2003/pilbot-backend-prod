@@ -277,6 +277,7 @@ from pydantic import BaseModel, validator
 from langchain_huggingface import HuggingFaceEmbeddings
 from huggingface_hub import InferenceClient
 import os
+import gc  # Garbage collector for memory optimization
 import pinecone
 import requests
 from groq import Groq
@@ -477,7 +478,7 @@ def query_with_template_and_sources(question, vectorstore, prmt_TEM):
         return "Hey there! 👋 I'm PilBot, your friendly assistant for Pillai College of Engineering! I can help you with:\n\n✨ Admissions & eligibility\n📚 Courses & programs\n🏫 Campus facilities & navigation\n🎓 Student activities & events\n\nWhat would you like to know about PCE?"
     
     # For ALL other queries, do vector search first
-    query_vector = embeddings.embed_query(question)
+    query_vector = get_embeddings().embed_query(question)
     query_results = vectorstore.query(vector=query_vector, top_k=10, include_metadata=True)
     
     # Get relevant context (even if low relevance, still include it)
@@ -496,7 +497,7 @@ def query_with_template_and_sources(question, vectorstore, prmt_TEM):
 
 def query_with_template_and_sources_NAV(question, vectorstore, prmt_TEM):
     """Query navigation with detailed context"""
-    query_vector = embeddings.embed_query(question)
+    query_vector = get_embeddings().embed_query(question)
     # Get more navigation options
     query_results = vectorstore.query(vector=query_vector, top_k=5, include_metadata=True)
     
@@ -515,8 +516,20 @@ def query_with_template_and_sources_NAV(question, vectorstore, prmt_TEM):
 # FastAPI Application
 app = FastAPI()
 
-# Embeddings model
-embeddings=HuggingFaceEmbeddings()
+# Lazy-load embeddings to save memory (OPTIMIZED)
+_embeddings = None
+
+def get_embeddings():
+    """Lazy-load embeddings model only when needed - uses smaller model for memory efficiency"""
+    global _embeddings
+    if _embeddings is None:
+        # Use smaller, faster model to reduce memory footprint (from ~400MB to ~120MB)
+        _embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",  # Smaller model
+            model_kwargs={'device': 'cpu'},  # Force CPU to save memory
+            encode_kwargs={'normalize_embeddings': True, 'batch_size': 1}  # Minimize memory usage
+        )
+    return _embeddings
 
 # CORS Middleware - Allow multiple origins
 allowed_origins = HOSTS.split(',') if ',' in HOSTS else [HOSTS] if HOSTS != '*' else ['*']
@@ -594,6 +607,7 @@ async def chat(request: ChatRequest, http_request: Request):
     try:
         # Generate Response
         response = query_with_template_and_sources(request.message, gen_index, TEMPLATE)
+        gc.collect()  # Free memory after processing
         return {
             "reply": response,
         }
@@ -601,6 +615,7 @@ async def chat(request: ChatRequest, http_request: Request):
     except Exception as e:
         # Log error internally but don't expose details to user
         print(f"Error in /chat/general: {str(e)}")  # Use proper logging in production
+        gc.collect()  # Free memory even on error
         return {
             "reply": "I'm having trouble processing your request right now. Please try again in a moment.",
             "intent": "Error"
@@ -616,11 +631,13 @@ def handle_academics_query(request: ChatRequest, http_request: Request):
     try:
         # Generate Response using general index for academic queries
         response = query_with_template_and_sources(request.message, gen_index, TEMPLATE)
+        gc.collect()  # Free memory
         return {
             "reply": response
         }
     except Exception as e:
         print(f"Error in /chat/academics: {str(e)}")
+        gc.collect()
         return {
             "reply": "I'm having trouble processing your request right now. Please try again in a moment.",
             "intent": "Error"
@@ -638,11 +655,12 @@ def handle_campus_life_query(request: ChatRequest, http_request: Request):
             raise Exception("Navigation store not initialized")
 
         nav_response=query_with_template_and_sources_NAV(request.message, nav_index, Nav_prompt)
-
+        gc.collect()  # Free memory
         return {"reply": nav_response}
     
     except Exception as e:
         print(f"Error in /chat/campus-nav: {str(e)}")
+        gc.collect()
         return {
             "reply": "I'm having trouble processing your request right now. Please try again in a moment.",
             "intent": "Error"
@@ -658,11 +676,13 @@ def handle_admissions_query(request: ChatRequest, http_request: Request):
     try:
         # Generate Response using general index for admissions queries
         response = query_with_template_and_sources(request.message, gen_index, TEMPLATE)
+        gc.collect()  # Free memory
         return {
             "reply": response
         }
     except Exception as e:
         print(f"Error in /chat/admissions: {str(e)}")
+        gc.collect()
         return {
             "reply": "I'm having trouble processing your request right now. Please try again in a moment.",
             "intent": "Error"

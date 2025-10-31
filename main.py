@@ -270,9 +270,10 @@
 #     return {'reply': "Mail sent"}
 
 
-from fastapi import FastAPI, Request, Body
+from fastapi import FastAPI, Request, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from pydantic import BaseModel, validator
 from langchain_huggingface import HuggingFaceEmbeddings
 from huggingface_hub import InferenceClient
 import os
@@ -280,8 +281,15 @@ import pinecone
 import requests
 from groq import Groq
 from services import email_service
+from middleware import RateLimiter, sanitize_input, get_client_ip
 from dotenv import load_dotenv
 load_dotenv()
+
+# Initialize rate limiter
+rate_limiter = RateLimiter(
+    requests_per_minute=int(os.getenv('RATE_LIMIT_PER_MINUTE', 30)),
+    requests_per_hour=int(os.getenv('RATE_LIMIT_PER_HOUR', 200))
+)
 
 
 # Environment variables
@@ -302,28 +310,44 @@ nav_index = pinecone_c.Index(NAV_INDEX)
 
 
 TEMPLATE = '''
-You are an AI assistant EXCLUSIVELY for Pillai College of Engineering (PCE). You MUST ONLY use information from the context provided below.
+You are PilBot, a friendly AI assistant for Pillai College of Engineering (PCE). You're here to help students like a helpful friend!
 
-CRITICAL RULES:
-1. ONLY answer using facts from the Context below - DO NOT use any external knowledge
-2. If the Context doesn't contain the answer, say: "I don't have that specific information in my database. Please contact PCE directly or visit www.pce.ac.in"
-3. For greetings, respond warmly but then ask how you can help with PCE information
-4. Be specific and detailed when information IS available in the context
-5. Include specific data like numbers, dates, names when they appear in the context
+YOUR PERSONALITY:
+- Friendly, warm, and conversational
+- Helpful and encouraging
+- Use casual, student-friendly language
+- Smart and knowledgeable about both PCE specifically AND general college/engineering topics
+
+HOW TO ANSWER:
+1. **For PCE-specific questions** (admissions, fees, programs, campus, etc.):
+   - PRIORITIZE the Context below if it has relevant info
+   - If context is incomplete, use your general knowledge to fill gaps
+   - Always cite when you're using official PCE data vs. general knowledge
+
+2. **For general questions** (greetings, "who are you", "how are you", etc.):
+   - Respond naturally using your own intelligence
+   - Introduce yourself as PilBot, the PCE assistant
+   - Be warm and welcoming
+
+3. **For questions OUTSIDE PCE scope** (weather, sports, entertainment, etc.):
+   - Politely redirect: "Haha, I wish I could help with that, but I'm specifically here for PCE-related stuff! 😅 Ask me about admissions, courses, campus facilities, or anything about engineering!"
+
+4. **When context has [No specific PCE database matches]**:
+   - Still answer if you have general knowledge relevant to PCE/engineering
+   - Be honest that you're using general knowledge, not official PCE data
+   - Example: "Based on general engineering college standards (I don't have PCE's exact data on this), typically..."
 
 Context from PCE Database:
 {summaries}
 
-User Question: {question}
+Student's Question: {question}
 
-Instructions:
-- Extract ALL relevant details from the context
-- Be comprehensive - include programs, departments, facilities, contacts, etc.
-- Use exact names, numbers, and details from the context
-- If context has lists or multiple items, include them all
-- Never make up information that's not in the context
+Remember: 
+- Use BOTH the context AND your own intelligence
+- Be specific when you have PCE data, helpful when you don't
+- Always friendly and student-focused!
 
-Answer based ONLY on the context above:'''
+Answer:'''
 # Intent and Reframe Templates
 INTENT_TEMPLATE = '''
 Classify the intent of the user query as "Broad" if it is a general request or "Specific" if it asks for detailed information or "Mail" if it asks to mail the information.
@@ -444,19 +468,29 @@ def generate_fallback_response(question, doc_summaries):
 
 def query_with_template_and_sources(question, vectorstore, prmt_TEM):    
     """Query general knowledge with more context for comprehensive answers"""
+    
+    query_lower = question.lower().strip()
+    
+    # Handle simple greetings with quick response (no AI needed)
+    greeting_keywords = ['hello', 'hi', 'hey', 'hii', 'helo', 'hola']
+    if any(query_lower == greet or query_lower == greet + '!' for greet in greeting_keywords):
+        return "Hey there! 👋 I'm PilBot, your friendly assistant for Pillai College of Engineering! I can help you with:\n\n✨ Admissions & eligibility\n📚 Courses & programs\n🏫 Campus facilities & navigation\n🎓 Student activities & events\n\nWhat would you like to know about PCE?"
+    
+    # For ALL other queries, do vector search first
     query_vector = embeddings.embed_query(question)
-    # Increased top_k to get more relevant information
     query_results = vectorstore.query(vector=query_vector, top_k=10, include_metadata=True)
     
-    # Format context with scores to prioritize most relevant info
+    # Get relevant context (even if low relevance, still include it)
     doc_summaries = '\n\n'.join([
         f"[Relevance: {match['score']:.2f}] {match['metadata']['text']}" 
-        for match in query_results['matches'] if match['score'] > 0.3  # Filter low relevance
+        for match in query_results['matches'] if match['score'] > 0.25  # Lower threshold to include more context
     ])
     
+    # If no context at all, provide empty context but still let AI respond
     if not doc_summaries:
-        return "I don't have specific information about that in my database. Please contact PCE directly or visit www.pce.ac.in for more details."
+        doc_summaries = "[No specific PCE database matches found for this query]"
     
+    # ALWAYS call the AI - let it use both its knowledge AND the context
     answer = query_llama(question, doc_summaries, prmt_TEM)
     return answer
 
@@ -514,11 +548,32 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
-# Pydantic Model for Request
+# Pydantic Model for Request with validation
 class ChatRequest(BaseModel):
     message: str
     user_name: str = ""
     email: str = ""
+    
+    @validator('message')
+    def validate_message(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Message cannot be empty')
+        if len(v) > 2000:
+            raise ValueError('Message too long (max 2000 characters)')
+        # Sanitize input
+        return sanitize_input(v)
+    
+    @validator('email')
+    def validate_email(cls, v):
+        if v and len(v) > 100:
+            raise ValueError('Email too long')
+        return sanitize_input(v) if v else ""
+    
+    @validator('user_name')
+    def validate_user_name(cls, v):
+        if v and len(v) > 100:
+            raise ValueError('Name too long')
+        return sanitize_input(v) if v else ""
 
 class Message(BaseModel):
     text: str
@@ -530,63 +585,108 @@ class EmailRequest(BaseModel):
     email: str
 
 @app.post("/chat/general")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, http_request: Request):
+    # Rate limiting
+    client_ip = get_client_ip(http_request)
+    if rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+    
     try:
-
         # Generate Response
         response = query_with_template_and_sources(request.message, gen_index, TEMPLATE)
         return {
             "reply": response,
-            # "intent": intent
         }
     
     except Exception as e:
+        # Log error internally but don't expose details to user
+        print(f"Error in /chat/general: {str(e)}")  # Use proper logging in production
         return {
-            "reply": f"An error occurred: {str(e)}",
+            "reply": "I'm having trouble processing your request right now. Please try again in a moment.",
             "intent": "Error"
         }
     
 @app.post("/chat/academics")
-def handle_academics_query(request: ChatRequest):
-    # Academics-specific logic
-    print(request.message)
-    return {"reply": request.message}
+def handle_academics_query(request: ChatRequest, http_request: Request):
+    # Rate limiting
+    client_ip = get_client_ip(http_request)
+    if rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+    
+    try:
+        # Generate Response using general index for academic queries
+        response = query_with_template_and_sources(request.message, gen_index, TEMPLATE)
+        return {
+            "reply": response
+        }
+    except Exception as e:
+        print(f"Error in /chat/academics: {str(e)}")
+        return {
+            "reply": "I'm having trouble processing your request right now. Please try again in a moment.",
+            "intent": "Error"
+        }
 
 @app.post("/chat/campus-nav")
-def handle_campus_life_query(request: ChatRequest):
-    # Campus life specific logic
+def handle_campus_life_query(request: ChatRequest, http_request: Request):
+    # Rate limiting
+    client_ip = get_client_ip(http_request)
+    if rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
     
     try:
         if nav_index is None:
             raise Exception("Navigation store not initialized")
 
-
         nav_response=query_with_template_and_sources_NAV(request.message, nav_index, Nav_prompt)
-        # print(nav_response)
 
         return {"reply": nav_response}
     
     except Exception as e:
+        print(f"Error in /chat/campus-nav: {str(e)}")
         return {
-            "reply": f"An error occurred: {str(e)}",
+            "reply": "I'm having trouble processing your request right now. Please try again in a moment.",
             "intent": "Error"
         }
 
 @app.post("/chat/admissions")
-def handle_admissions_query(message: str):
-    # Admissions-specific logic
-    return {"reply": "Admissions-related response"}
+def handle_admissions_query(request: ChatRequest, http_request: Request):
+    # Rate limiting
+    client_ip = get_client_ip(http_request)
+    if rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+    
+    try:
+        # Generate Response using general index for admissions queries
+        response = query_with_template_and_sources(request.message, gen_index, TEMPLATE)
+        return {
+            "reply": response
+        }
+    except Exception as e:
+        print(f"Error in /chat/admissions: {str(e)}")
+        return {
+            "reply": "I'm having trouble processing your request right now. Please try again in a moment.",
+            "intent": "Error"
+        }
 
 @app.post('/chat/mail')
-def handle_sending_mail(request: EmailRequest):
+def handle_sending_mail(request: EmailRequest, http_request: Request):
+    # Stricter rate limiting for email (more expensive operation)
+    client_ip = get_client_ip(http_request)
+    if rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+    
     try:
-        user = request.email.split('@')[0]
-        print(f"📧 Mail request received - To: {request.email}, Message: {request.message[:50]}...")
+        # Sanitize email input
+        sanitized_email = sanitize_input(request.email, max_length=100)
+        sanitized_message = sanitize_input(request.message, max_length=2000)
         
-        email_service.sendEmail(request.email, user, request.message)
+        user = sanitized_email.split('@')[0]
+        print(f"📧 Mail request received - To: {sanitized_email}, Message: {sanitized_message[:50]}...")
+        
+        email_service.sendEmail(sanitized_email, user, sanitized_message)
         
         return {
-            'reply': f"✅ Email sent successfully to {request.email}! Check your inbox.",
+            'reply': f"✅ Email sent successfully to {sanitized_email}! Check your inbox.",
             'success': True
         }
     except Exception as e:

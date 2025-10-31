@@ -520,14 +520,15 @@ app = FastAPI()
 _embeddings = None
 
 def get_embeddings():
-    """Lazy-load embeddings model only when needed - uses smaller model for memory efficiency"""
+    """Lazy-load embeddings model only when needed - MUST match Pinecone vector model"""
     global _embeddings
     if _embeddings is None:
-        # Use smaller, faster model to reduce memory footprint (from ~400MB to ~120MB)
+        # Use SAME model as Pinecone vectors (all-mpnet-base-v2)
+        # Lazy loading saves ~420MB at startup (loads on first request instead)
         _embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",  # Smaller model
+            model_name="sentence-transformers/all-mpnet-base-v2",  # MUST match Pinecone!
             model_kwargs={'device': 'cpu'},  # Force CPU to save memory
-            encode_kwargs={'normalize_embeddings': True, 'batch_size': 1}  # Minimize memory usage
+            encode_kwargs={'batch_size': 1}  # Minimize memory per request
         )
     return _embeddings
 

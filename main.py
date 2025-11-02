@@ -532,15 +532,17 @@ def get_embeddings():
 # CORS Middleware - Allow multiple origins
 if HOSTS == '*':
     allowed_origins = ['*']
-    print("⚠️ CORS: Allowing ALL origins (wildcard mode)")
+    allow_creds = False  # Can't use credentials with wildcard
+    print("⚠️ CORS: Allowing ALL origins (wildcard mode, no credentials)")
 else:
     allowed_origins = [origin.strip() for origin in HOSTS.split(',')]
+    allow_creds = True
     print(f"✅ CORS: Allowing specific origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
+    allow_credentials=allow_creds,
     allow_methods=['*'],
     allow_headers=['*'],
 )

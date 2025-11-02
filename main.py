@@ -270,16 +270,13 @@
 #     return {'reply': "Mail sent"}
 
 
-from fastapi import FastAPI, Request, Body, HTTPException
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, validator
 from langchain_huggingface import HuggingFaceEmbeddings
-from huggingface_hub import InferenceClient
 import os
 import gc  # Garbage collector for memory optimization
 import pinecone
-import requests
 from groq import Groq
 from services import email_service
 from middleware import RateLimiter, sanitize_input, get_client_ip
@@ -527,9 +524,17 @@ def get_embeddings():
         # Lazy loading saves ~420MB at startup (loads on first request instead)
         _embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-mpnet-base-v2",  # MUST match Pinecone!
-            model_kwargs={'device': 'cpu'},  # Force CPU to save memory
-            encode_kwargs={'batch_size': 1}  # Minimize memory per request
+            model_kwargs={
+                'device': 'cpu',  # Force CPU to save memory
+                'cache_folder': '/tmp/transformers_cache'  # Use temp folder to avoid disk issues
+            },
+            encode_kwargs={
+                'batch_size': 1,  # Minimize memory per request
+                'show_progress_bar': False,  # Disable progress bar to save memory
+                'convert_to_numpy': True  # Convert to numpy immediately to free tensor memory
+            }
         )
+        gc.collect()  # Immediately free any temporary memory from model loading
     return _embeddings
 
 # CORS Middleware - Allow multiple origins
@@ -541,6 +546,13 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
+
+# Force garbage collection after startup to free memory
+@app.on_event("startup")
+async def startup_event():
+    """Run garbage collection on startup to minimize memory usage"""
+    gc.collect()
+    print("✅ Startup complete - Memory optimized")
 
 # Health Check Endpoint
 @app.get("/")

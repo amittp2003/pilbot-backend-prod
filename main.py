@@ -523,13 +523,8 @@ def get_embeddings():
         # Using original all-mpnet-base-v2 (best quality) with aggressive optimization
         _embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-mpnet-base-v2",
-            model_kwargs={'device': 'cpu'},
-            encode_kwargs={
-                'batch_size': 1,
-                'show_progress_bar': False,
-                'convert_to_numpy': True,
-                'normalize_embeddings': False
-            }
+            model_kwargs={'device': 'cpu'}
+            # Removed encode_kwargs to avoid argument conflicts
         )
         gc.collect()
     return _embeddings

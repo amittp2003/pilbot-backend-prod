@@ -13,8 +13,8 @@ NAV_INDEX = os.environ['NAV_INDEX']
 pc = pinecone.Pinecone(api_key=PINECONE_API_KEY)
 nav_index = pc.Index(NAV_INDEX)
 
-# Initialize embeddings
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
+# Initialize embeddings - USING TINY MODEL FOR 512MB RAM
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 # Load all navigation JSON files
 navigation_files = [

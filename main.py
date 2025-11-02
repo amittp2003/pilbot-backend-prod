@@ -517,14 +517,14 @@ app = FastAPI()
 _embeddings = None
 
 def get_embeddings():
-    """Lazy-load embeddings model with maximum optimization"""
+    """Lazy-load embeddings model - Using tiny MiniLM for 512MB RAM compatibility"""
     global _embeddings
     if _embeddings is None:
-        # Using original all-mpnet-base-v2 (best quality) with aggressive optimization
+        # Using all-MiniLM-L6-v2 (80MB) - fits in 512MB free tier
+        # NOTE: Pinecone vectors MUST be re-indexed with this model!
         _embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-mpnet-base-v2",
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
             model_kwargs={'device': 'cpu'}
-            # Removed encode_kwargs to avoid argument conflicts
         )
         gc.collect()
     return _embeddings

@@ -14,9 +14,9 @@ GEN_INDEX = os.environ['GEN_INDEX']
 pc = pinecone.Pinecone(api_key=PINECONE_API_KEY)
 gen_index = pc.Index(GEN_INDEX)
 
-# Initialize embeddings
-print("🔄 Initializing embeddings model...")
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
+# Initialize embeddings - USING TINY MODEL FOR 512MB RAM
+print("🔄 Initializing MiniLM embeddings model (80MB)...")
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 # Function to recursively extract text from JSON data
 def extract_text(data):

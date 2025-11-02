@@ -11,10 +11,10 @@ from datetime import datetime
 
 load_dotenv()
 
-# Initialize
+# Initialize - USING TINY MODEL FOR 512MB RAM
 pc = Pinecone(api_key=os.getenv('PINECONE_API_KEY'))
 index = pc.Index(os.getenv('GEN_INDEX'))
-embeddings = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
+embeddings = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
 # Text splitter for chunking
 text_splitter = RecursiveCharacterTextSplitter(

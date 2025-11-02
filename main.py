@@ -525,10 +525,7 @@ def get_embeddings():
         # But it's the ONLY way to fit in 512MB free tier
         _embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2",  # Tiny model - 80MB only
-            model_kwargs={
-                'device': 'cpu',
-                'cache_folder': '/tmp/transformers_cache'
-            },
+            model_kwargs={'device': 'cpu'},  # Removed cache_folder - it was causing the error!
             encode_kwargs={
                 'batch_size': 1,
                 'show_progress_bar': False,

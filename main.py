@@ -293,10 +293,10 @@ rate_limiter = RateLimiter(
 # Environment variables
 HF_TOKEN = os.getenv('HF_TOKEN')
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-HOSTS= os.environ['HOSTS']
-PINECONE_API_KEY=os.environ['PINECONE_API_KEY']
-GEN_INDEX=os.environ['GEN_INDEX']
-NAV_INDEX=os.environ['NAV_INDEX']
+HOSTS = os.getenv('HOSTS', '*')  # Default to wildcard if not set
+PINECONE_API_KEY = os.environ['PINECONE_API_KEY']
+GEN_INDEX = os.environ['GEN_INDEX']
+NAV_INDEX = os.environ['NAV_INDEX']
 
 # Initialize Groq client
 groq_client = Groq(api_key=GROQ_API_KEY)
@@ -530,10 +530,16 @@ def get_embeddings():
     return _embeddings
 
 # CORS Middleware - Allow multiple origins
-allowed_origins = HOSTS.split(',') if ',' in HOSTS else [HOSTS] if HOSTS != '*' else ['*']
+if HOSTS == '*':
+    allowed_origins = ['*']
+    print("⚠️ CORS: Allowing ALL origins (wildcard mode)")
+else:
+    allowed_origins = [origin.strip() for origin in HOSTS.split(',')]
+    print(f"✅ CORS: Allowing specific origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins if HOSTS != '*' else ['*'],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],

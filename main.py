@@ -517,24 +517,26 @@ app = FastAPI()
 _embeddings = None
 
 def get_embeddings():
-    """Lazy-load embeddings model only when needed - MUST match Pinecone vector model"""
+    """Lazy-load embeddings model - Using MiniLM for 512MB RAM compatibility"""
     global _embeddings
     if _embeddings is None:
-        # Use SAME model as Pinecone vectors (all-mpnet-base-v2)
-        # Lazy loading saves ~420MB at startup (loads on first request instead)
+        # CRITICAL: Using all-MiniLM-L6-v2 (80MB) instead of all-mpnet-base-v2 (420MB)
+        # This is INCOMPATIBLE with your Pinecone vectors - you MUST re-index Pinecone!
+        # But it's the ONLY way to fit in 512MB free tier
         _embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-mpnet-base-v2",  # MUST match Pinecone!
+            model_name="sentence-transformers/all-MiniLM-L6-v2",  # Tiny model - 80MB only
             model_kwargs={
-                'device': 'cpu',  # Force CPU to save memory
-                'cache_folder': '/tmp/transformers_cache'  # Use temp folder to avoid disk issues
+                'device': 'cpu',
+                'cache_folder': '/tmp/transformers_cache'
             },
             encode_kwargs={
-                'batch_size': 1,  # Minimize memory per request
-                'show_progress_bar': False,  # Disable progress bar to save memory
-                'convert_to_numpy': True  # Convert to numpy immediately to free tensor memory
+                'batch_size': 1,
+                'show_progress_bar': False,
+                'convert_to_numpy': True,
+                'normalize_embeddings': False  # Skip normalization to save compute
             }
         )
-        gc.collect()  # Immediately free any temporary memory from model loading
+        gc.collect()
     return _embeddings
 
 # CORS Middleware - Allow multiple origins

@@ -19,8 +19,7 @@ load_dotenv()
 print("🔄 Loading MiniLM embeddings model (80MB)...")
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
-    model_kwargs={'device': 'cpu'},
-    encode_kwargs={'batch_size': 1, 'show_progress_bar': True}
+    model_kwargs={'device': 'cpu'}
 )
 
 # Connect to Pinecone

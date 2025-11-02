@@ -517,20 +517,18 @@ app = FastAPI()
 _embeddings = None
 
 def get_embeddings():
-    """Lazy-load embeddings model - Using MiniLM for 512MB RAM compatibility"""
+    """Lazy-load embeddings model with maximum optimization"""
     global _embeddings
     if _embeddings is None:
-        # CRITICAL: Using all-MiniLM-L6-v2 (80MB) instead of all-mpnet-base-v2 (420MB)
-        # This is INCOMPATIBLE with your Pinecone vectors - you MUST re-index Pinecone!
-        # But it's the ONLY way to fit in 512MB free tier
+        # Using original all-mpnet-base-v2 (best quality) with aggressive optimization
         _embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",  # Tiny model - 80MB only
-            model_kwargs={'device': 'cpu'},  # Removed cache_folder - it was causing the error!
+            model_name="sentence-transformers/all-mpnet-base-v2",
+            model_kwargs={'device': 'cpu'},
             encode_kwargs={
                 'batch_size': 1,
                 'show_progress_bar': False,
                 'convert_to_numpy': True,
-                'normalize_embeddings': False  # Skip normalization to save compute
+                'normalize_embeddings': False
             }
         )
         gc.collect()

@@ -419,9 +419,9 @@ Respond in a friendly, professional manner while strictly following these rules.
                     }
                 ],
                 model=model_id,
-                temperature=0.3,  # Lower temperature for more factual, less creative responses
-                max_tokens=800,  # Increased for more comprehensive answers
-                top_p=0.9,  # More focused on high-probability tokens
+                temperature=0.2,  # OPTIMIZED: Lower for faster, more focused responses
+                max_tokens=500,  # OPTIMIZED: Reduced from 800 for faster generation
+                top_p=0.85,  # OPTIMIZED: More focused for speed
                 stream=False
             )
             
@@ -474,14 +474,14 @@ def query_with_template_and_sources(question, vectorstore, prmt_TEM):
     if any(query_lower == greet or query_lower == greet + '!' for greet in greeting_keywords):
         return "Hey there! 👋 I'm PilBot, your friendly assistant for Pillai College of Engineering! I can help you with:\n\n✨ Admissions & eligibility\n📚 Courses & programs\n🏫 Campus facilities & navigation\n🎓 Student activities & events\n\nWhat would you like to know about PCE?"
     
-    # For ALL other queries, do vector search first
+    # For ALL other queries, do vector search first (OPTIMIZED: reduced top_k for speed)
     query_vector = get_embeddings().embed_query(question)
-    query_results = vectorstore.query(vector=query_vector, top_k=10, include_metadata=True)
+    query_results = vectorstore.query(vector=query_vector, top_k=5, include_metadata=True)  # Reduced from 10 to 5
     
-    # Get relevant context (even if low relevance, still include it)
+    # Get relevant context (OPTIMIZED: higher threshold for speed)
     doc_summaries = '\n\n'.join([
         f"[Relevance: {match['score']:.2f}] {match['metadata']['text']}" 
-        for match in query_results['matches'] if match['score'] > 0.25  # Lower threshold to include more context
+        for match in query_results['matches'] if match['score'] > 0.35  # Increased from 0.25 for faster processing
     ])
     
     # If no context at all, provide empty context but still let AI respond
@@ -493,15 +493,15 @@ def query_with_template_and_sources(question, vectorstore, prmt_TEM):
     return answer
 
 def query_with_template_and_sources_NAV(question, vectorstore, prmt_TEM):
-    """Query navigation with detailed context"""
+    """Query navigation with detailed context - OPTIMIZED"""
     query_vector = get_embeddings().embed_query(question)
-    # Get more navigation options
-    query_results = vectorstore.query(vector=query_vector, top_k=5, include_metadata=True)
+    # Get navigation options (OPTIMIZED: reduced to 3 for speed)
+    query_results = vectorstore.query(vector=query_vector, top_k=3, include_metadata=True)
     
-    # Format with all metadata for navigation
+    # Format with all metadata for navigation (OPTIMIZED: higher threshold)
     doc_summaries = '\n\n'.join([
         f"[Match Score: {match['score']:.2f}]\n{match['metadata']['text']}" 
-        for match in query_results['matches'] if match['score'] > 0.25
+        for match in query_results['matches'] if match['score'] > 0.35
     ])
     
     if not doc_summaries:
@@ -517,16 +517,17 @@ app = FastAPI()
 _embeddings = None
 
 def get_embeddings():
-    """Lazy-load embeddings model - Using tiny MiniLM for 512MB RAM compatibility"""
+    """Lazy-load embeddings model - OPTIMIZED for speed and memory"""
     global _embeddings
     if _embeddings is None:
+        print("🔄 Loading MiniLM model (80MB, 384 dimensions)...")
         # Using all-MiniLM-L6-v2 (80MB) - fits in 512MB free tier
-        # NOTE: Pinecone vectors MUST be re-indexed with this model!
         _embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2",
             model_kwargs={'device': 'cpu'}
         )
         gc.collect()
+        print("✅ MiniLM model loaded successfully")
     return _embeddings
 
 # CORS Middleware - Allow multiple origins
